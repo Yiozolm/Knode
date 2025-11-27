@@ -1486,9 +1486,9 @@
         const App = () => {
             const [systemMsg, setSystemMsg] = useState('你是一个专业的数学老师');
             const [modelId, setModelId] = useState('glm-4.5-air');
-            const [isInitialized, setIsInitialized] = useState(false);
+            const [isInitialized, setIsInitialized] = useState(true);
             const [isLoading, setIsLoading] = useState(false);
-            const [status, setStatus] = useState({ type: 'info', message: '请初始化AI助手' });
+            const [status, setStatus] = useState({ type: 'info', message: 'AI助手已就绪' });
             const [rootNode, setRootNode] = useState(null);
             const [inputMessage, setInputMessage] = useState('');
             const [nodeIdCounter, setNodeIdCounter] = useState(1);
@@ -1628,27 +1628,7 @@ $$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$
                 console.log('=== End test ===');
             };
 
-            const handleInit = async () => {
-                setIsLoading(true);
-                try {
-                    const result = await api.initAgent(systemMsg, modelId);
-                    if (result.success) {
-                        setIsInitialized(true);
-                        setCurrentConversationId(result.conversation_id);
-                        showStatus('success', 'AI助手初始化成功！');
-
-                        // 刷新对话列表
-                        loadConversations();
-                    } else {
-                        showStatus('error', `初始化失败: ${result.error}`);
-                    }
-                } catch (error) {
-                    showStatus('error', `网络错误: ${error.message}`);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
+  
             // Conversation management functions
             const loadConversations = async () => {
                 try {
@@ -1742,6 +1722,18 @@ $$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$
 
                 setIsLoading(true);
                 try {
+                    // 如果还没有对话ID，先初始化AI助手
+                    if (!currentConversationId) {
+                        const initResult = await api.initAgent(systemMsg, modelId);
+                        if (!initResult.success) {
+                            showStatus('error', `初始化失败: ${initResult.error}`);
+                            return;
+                        }
+                        setCurrentConversationId(initResult.conversation_id);
+                        showStatus('success', 'AI助手初始化成功！');
+                        loadConversations();
+                    }
+
                     const result = await api.chat(inputMessage);
                     if (result.success) {
                         // 使用后端返回的数据库节点ID和结构
@@ -1901,25 +1893,7 @@ $$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$
                                     placeholder="定义AI助手的角色和能力..."
                                 />
                             </div>
-
-                            <button
-                                className="init-btn"
-                                onClick={handleInit}
-                                disabled={isLoading}
-                            >
-                                {isLoading ? (
-                                    <div className="loading">
-                                        <div className="spinner"></div>
-                                        初始化中...
-                                    </div>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-robot"></i>
-                                        初始化AI助手
-                                    </>
-                                )}
-                            </button>
-
+  
                             {isInitialized && (
                                 <div className="input-container">
                                     <button
@@ -2053,8 +2027,7 @@ $$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$
                                 </div>
                             )}
 
-                            {isInitialized && (
-                                <div className="input-group">
+                            <div className="input-group">
                                     <input
                                         type="text"
                                         value={inputMessage}
@@ -2080,8 +2053,6 @@ $$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$
                                         )}
                                     </button>
                                 </div>
-                            )}
-
                             <div className="tree">
                                 {rootNode ? (
                                     <KnowledgeNode
