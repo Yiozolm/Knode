@@ -1,5 +1,6 @@
 import sqlite3
 import uuid
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -35,14 +36,16 @@ class Conversation:
             self.updated_at = datetime.now().isoformat()
 
 class DatabaseManager:
-    def __init__(self, db_path: str = "knode.db"):
+    def __init__(self, db_path: str = os.path.join(os.path.dirname(__file__), "knode.db")):
         self.db_path = db_path
         self.init_database()
 
     def init_database(self):
         """初始化数据库表结构"""
         with sqlite3.connect(self.db_path) as conn:
+            # 启用外键约束
             cursor = conn.cursor()
+            cursor.execute('PRAGMA foreign_keys = ON')
 
             # 对话表
             cursor.execute('''
@@ -183,12 +186,38 @@ class DatabaseManager:
 
     def delete_conversation(self, conversation_id: str) -> bool:
         """删除对话"""
+        print(f"开始删除对话: {conversation_id}")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+
+            # 先检查对话是否存在
+            cursor.execute('SELECT id FROM conversations WHERE id = ?', (conversation_id,))
+            conversation_exists = cursor.fetchone()
+            if not conversation_exists:
+                print(f"对话 {conversation_id} 不存在")
+                return {'success': False, 'nodes_deleted': 0, 'conversation_deleted': False}
+
+            # 检查有多少个节点
+            cursor.execute('SELECT COUNT(*) FROM conversation_nodes WHERE conversation_id = ?', (conversation_id,))
+            nodes_count = cursor.fetchone()[0]
+            print(f"对话 {conversation_id} 有 {nodes_count} 个节点")
+
+            # 手动删除相关的节点（更可靠的方式）
             cursor.execute('DELETE FROM conversation_nodes WHERE conversation_id = ?', (conversation_id,))
+            nodes_deleted = cursor.rowcount
+            print(f"删除了 {nodes_deleted} 个节点")
+
+            # 删除对话
             cursor.execute('DELETE FROM conversations WHERE id = ?', (conversation_id,))
+            conversation_deleted = cursor.rowcount > 0
+            print(f"删除对话结果: {conversation_deleted}")
+
             conn.commit()
-            return cursor.rowcount > 0
+            return {
+                'success': conversation_deleted,
+                'nodes_deleted': nodes_deleted,
+                'conversation_deleted': conversation_deleted
+            }
 
     def update_conversation_title(self, conversation_id: str, title: str) -> bool:
         """更新对话标题"""
